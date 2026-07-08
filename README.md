@@ -41,12 +41,30 @@ Wire it into your build to turn `.aql` files into components at deploy time.
 - **Text emitted as JS-string expressions**, so nothing needs escaping.
 - a11y + analytics attributes compiled in.
 
-## Scope (v0.1)
+## Governance: fails closed
+
+Static compiled output **cannot** enforce *runtime* governance — per-viewer role /
+consent / PII gating needs facts that don't exist at compile time. So the compiler
+**omits** any node flagged `protected` / `roles` / `consentCategory` / `pii`, or
+`hidden` (and governed descendants of public containers), and emits a comment
+counting what it dropped. Render conditional-per-viewer content through the
+`@noidmejs/atomkit` runtime renderer instead.
+
+## Scope (v0.2)
 
 Covers **static structure + style + a11y + analytics** — great for marketing/content
 pages you want to own as code. Dynamic concerns (API data-binding, responsive media
 queries, runtime PII/consent gating, the client `video` atom) are **runtime** features:
 use the `@noidmejs/atomkit` renderer for those. A Vite/Next `.aql` plugin and a
 document/Next-RSC backend are on the roadmap.
+
+## Security
+
+See [SECURITY.md](./SECURITY.md). In short: no raw HTML / no `eval`; styles resolved
+through atomkit's whitelist; dimension props sanitised (`safeDim`); hrefs / srcs /
+icon paths guarded; U+2028/29 escaped; grid columns clamped; icon a11y parity with
+the runtime; **governance fails closed** (governed/hidden nodes omitted). Treat AQL
+input as trusted authoring. Report vulnerabilities via a GitHub Security Advisory.
+Pre-1.0 and not yet independently pen-tested.
 
 MIT © noidmejs

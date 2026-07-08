@@ -14,7 +14,19 @@ import { resolveStyle, safeHref, safeImageSrc, type BuilderNode } from '@noidmej
 const BOX_TAGS = new Set(['div', 'section', 'header', 'footer', 'main', 'article', 'aside', 'nav', 'ul', 'ol', 'li']);
 const TEXT_TAGS = new Set(['p', 'span', 'div', 'small', 'strong', 'em', 'label', 'blockquote']);
 
-const j = (v: unknown): string => JSON.stringify(v ?? '');
+// JSON.stringify + escape U+2028/U+2029 (valid in JSON strings but line
+// terminators in ES source) so emitted string literals parse on every toolchain.
+const j = (v: unknown): string =>
+  JSON.stringify(v ?? '').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+
+// Dimension props (min/width/gutter/height) are node.props, so they bypass the
+// runtime style whitelist — sanitise them here to match what the runtime accepts.
+function safeDim(v: unknown, fallback: string): string {
+  const s = v == null ? '' : String(v);
+  if (!s) return fallback;
+  if (/[<>{};]/.test(s) || /url\s*\(|expression\(|image-set\s*\(|cross-fade\s*\(/i.test(s) || s.length > 64) return fallback;
+  return s;
+}
 
 /** Atom default styles, replicated so compiled output matches the runtime atoms. */
 function defaultStyle(node: BuilderNode): Record<string, string | number> {
@@ -27,15 +39,15 @@ function defaultStyle(node: BuilderNode): Record<string, string | number> {
     case 'row':
       return { display: 'flex', flexDirection: 'row', gap: '16px', flexWrap: p.wrap === false ? 'nowrap' : 'wrap', alignItems: 'center' };
     case 'grid': {
-      const cols = Math.round(Number(p.cols)) || 0;
-      const min = p.min ? String(p.min) : '';
+      const cols = Math.min(24, Math.max(0, Math.round(Number(p.cols)) || 0));
+      const min = p.min ? safeDim(p.min, '') : '';
       const template = min ? `repeat(auto-fit,minmax(${min},1fr))` : cols ? `repeat(${cols},minmax(0,1fr))` : '';
       const s: Record<string, string> = { display: 'grid', gap: '16px' };
       if (template) s.gridTemplateColumns = template;
       return s;
     }
     case 'container':
-      return { maxWidth: String(p.width ?? '1200px'), marginLeft: 'auto', marginRight: 'auto', paddingLeft: String(p.gutter ?? '20px'), paddingRight: String(p.gutter ?? '20px') };
+      return { maxWidth: safeDim(p.width, '1200px'), marginLeft: 'auto', marginRight: 'auto', paddingLeft: safeDim(p.gutter, '20px'), paddingRight: safeDim(p.gutter, '20px') };
     case 'chip':
       return { display: 'inline-block', borderRadius: '999px', padding: '4px 12px', fontSize: '12px', fontWeight: 700 };
     default:
@@ -62,6 +74,7 @@ function attrs(node: BuilderNode): string {
     if (a.role) out.role = a.role;
     if (a.ariaLabel) out['aria-label'] = a.ariaLabel;
     if (a.ariaHidden) out['aria-hidden'] = true;
+    if (a.ariaDescribedby) out['aria-describedby'] = a.ariaDescribedby;
     if (typeof a.tabIndex === 'number') out.tabIndex = a.tabIndex;
     if (a.lang) out.lang = a.lang;
   }
@@ -98,12 +111,13 @@ export function emitNode(node: BuilderNode, indent: string): string {
     case 'divider':
       return `${indent}<hr${s}${a} />`;
     case 'spacer':
-      return `${indent}<div style={${JSON.stringify({ height: String(node.props?.height ?? '24px') })}} aria-hidden />`;
+      return `${indent}<div style={${JSON.stringify({ height: safeDim(node.props?.height, '24px') })}} aria-hidden />`;
     case 'icon': {
       const d = String(node.props?.path ?? '');
       if (!/^[\dMLHVCSQTAZmlhvcsqtaz\s.,-]+$/.test(d)) return `${indent}<span${a} />`;
       const size = String(node.props?.size ?? '24');
-      return `${indent}<svg width={${j(size)}} height={${j(size)}} viewBox={${j(String(node.props?.viewBox ?? '0 0 24 24'))}} fill="none" stroke="currentColor" strokeWidth={2}${s}${a}><path d={${j(d)}} strokeLinecap="round" strokeLinejoin="round" /></svg>`;
+      const iconA11y = node.a11y?.ariaLabel ? ' role="img"' : ' aria-hidden';
+      return `${indent}<svg width={${j(size)}} height={${j(size)}} viewBox={${j(String(node.props?.viewBox ?? '0 0 24 24'))}} fill="none" stroke="currentColor" strokeWidth={2}${s}${a}${iconA11y}><path d={${j(d)}} strokeLinecap="round" strokeLinejoin="round" /></svg>`;
     }
     case 'button': {
       const label = text(node) || 'Button';
@@ -131,7 +145,7 @@ export function emitNode(node: BuilderNode, indent: string): string {
     case 'section': {
       const contain = node.props?.contain !== false && node.props?.contain !== 'false';
       const inner = contain
-        ? `${child}<div style={${JSON.stringify({ maxWidth: String(node.props?.width ?? '1200px'), marginLeft: 'auto', marginRight: 'auto', paddingLeft: String(node.props?.gutter ?? '20px'), paddingRight: String(node.props?.gutter ?? '20px') })}}>\n${(node.children ?? []).map((c) => emitNode(c, child + '  ')).join('\n')}\n${child}</div>`
+        ? `${child}<div style={${JSON.stringify({ maxWidth: safeDim(node.props?.width, '1200px'), marginLeft: 'auto', marginRight: 'auto', paddingLeft: safeDim(node.props?.gutter, '20px'), paddingRight: safeDim(node.props?.gutter, '20px') })}}>\n${(node.children ?? []).map((c) => emitNode(c, child + '  ')).join('\n')}\n${child}</div>`
         : kids;
       return `${indent}<section${s}${a}>\n${inner}\n${indent}</section>`;
     }
