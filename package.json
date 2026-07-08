@@ -1,0 +1,24 @@
+{
+  "name": "@noidmejs/atomkit-compiler",
+  "version": "0.1.0",
+  "description": "Compile AQL (Atomkit Query Language) / atomkit documents to standalone React (TSX) code you own — no runtime lock-in. Turn .aql into a plain React component.",
+  "keywords": ["atomkit", "aql", "compiler", "codegen", "react", "ui-language", "no-code", "no-lock-in"],
+  "license": "MIT",
+  "author": "noidmejs",
+  "type": "module",
+  "bin": { "atomkit-compile": "./dist/cli.js" },
+  "files": ["dist"],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node test/compile.test.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": { "@noidmejs/atomkit": "^0.4.0" },
+  "devDependencies": { "typescript": "^5.6.0", "@types/node": "^20.0.0" },
+  "publishConfig": { "access": "public" },
+  "repository": { "type": "git", "url": "git+https://github.com/noidme-git/atomkit-compiler.git" },
+  "engines": { "node": ">=18" }
+}
