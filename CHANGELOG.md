@@ -2,6 +2,13 @@
 
 All notable changes to `@noidmejs/atomkit-compiler`. Pre-1.0: minor versions may break.
 
+## 0.5.0
+
+### Changed
+- Requires `@noidmejs/atomkit` `^0.8.0`, which carries a `maskNode` egress security fix.
+  Bumped in lockstep so `npm` cannot install two copies of core side by side — the
+  duplicate-copy hazard that let the runtime and the compiler drift apart before.
+
 ## 0.4.0
 
 ### BREAKING
