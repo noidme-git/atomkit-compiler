@@ -2,6 +2,35 @@
 
 All notable changes to `@noidmejs/atomkit-compiler`. Pre-1.0: minor versions may break.
 
+## 0.4.0
+
+### BREAKING
+- **Node >= 22.** `engines` was `">=18"`, but Node 18 reached end-of-life on
+  2025-04-30 and Node 20 on 2026-04-30 (per `nodejs/Release/schedule.json`).
+  Installing on Node 18/20/21 now fails with `EBADENGINE` under `--engine-strict`.
+  CI tests on 22 (maintenance LTS), 24 (active LTS) and 26 (current).
+
+### Changed
+- `typescript` devDependency → `^7.0.0`; `@types/node` → `^22` (tracks the
+  MINIMUM supported runtime, not the newest — typing against Node 26 while
+  claiming `>=22` would bless APIs that do not exist on the oldest runtime we support).
+- `prepublishOnly` now runs `npm run build && npm test`, not just the build.
+
+### Fixed
+- **The conformance harness no longer depends on the TypeScript Compiler API.**
+  TypeScript 7 removed the classic ("Strada") programmatic API entirely: `import *
+  as ts from 'typescript'` now yields only `{ version, versionMajorMinor }`, and
+  `ts.transpileModule` is `undefined`. A stable programmatic API is not expected
+  before TS 7.1. `test/conformance.test.mjs` now transpiles the emitted TSX with
+  **esbuild** (new devDependency) and evaluates it through a CommonJS module shim
+  rather than rewriting the source — esbuild hoists `export default` into a
+  trailing `export { X as default }`, so the old regex would have silently
+  yielded nothing and the harness would have gone blind while still reporting green.
+  Verified: 21/21 documents still match, and an injected divergence is still caught.
+- `tsconfig.json` gains `"types": ["node"]` — TS 7 no longer includes `@types/*`
+  implicitly, so `cli.ts` failed to resolve `node:fs`/`process`/`console`.
+- Requires `@noidmejs/atomkit` `^0.7.0`.
+
 ## 0.3.0
 
 The compiler is a second, hand-written implementation of atom semantics, and

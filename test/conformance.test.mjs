@@ -7,26 +7,38 @@
 // ordered` used different truthiness, and `list` compiled to a native bulleted
 // <ul> instead of the runtime's marker-less flex column with role="list".
 //
-// This harness compiles each document to TSX, transpiles it with the real
-// TypeScript compiler, renders it, and diffs the HTML against the runtime's.
-// "No lock-in" is only true for as long as this passes.
+// This harness compiles each document to TSX, transpiles it, renders it, and
+// diffs the HTML against the runtime's. "No lock-in" is only true while this passes.
+//
+// Transpiled with esbuild rather than the TypeScript API: TypeScript 7 removed the
+// classic ("Strada") programmatic Compiler API entirely — `import * as ts from
+// 'typescript'` now yields only { version, versionMajorMinor }, and transpileModule
+// is undefined. A stable programmatic API is not expected before TS 7.1.
 
 import assert from 'node:assert/strict';
-import * as ts from 'typescript';
+import { transformSync } from 'esbuild';
 import * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Render, defaultAtoms, compilePage } from '@noidmejs/atomkit';
 import { compileDocumentToReact } from '../dist/index.js';
 
-/** Transpile emitted TSX and evaluate it into a React component. */
+/** Transpile emitted TSX and evaluate it into a React component.
+ *
+ *  Transpiled to CommonJS and evaluated through a module shim rather than by
+ *  rewriting the source: esbuild hoists `export default` into a trailing
+ *  `export { X as default }`, so a regex that rewrites the export statement
+ *  silently yields nothing and the harness goes blind while still reporting green. */
 function componentFrom(tsx) {
-  const js = ts.transpileModule(tsx, {
-    compilerOptions: { jsx: ts.JsxEmit.React, module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
-  }).outputText;
-  // Strip the `import * as React` line; React is injected as a parameter instead.
-  const body = js.replace(/^\s*import\s+\*\s+as\s+React\s+from\s+['"]react['"];?\s*$/m, '');
-  const factory = new Function('React', `${body.replace(/export default function/, 'return function')}`);
-  return factory(React);
+  const js = transformSync(tsx, { loader: 'tsx', jsx: 'transform', format: 'cjs', target: 'es2020' }).code;
+  const mod = { exports: {} };
+  const req = (name) => {
+    if (name === 'react') return React;
+    throw new Error(`compiled component required an unexpected module: ${name}`);
+  };
+  new Function('require', 'module', 'exports', js)(req, mod, mod.exports);
+  const Component = mod.exports.default;
+  if (typeof Component !== 'function') throw new Error('compiled TSX did not export a component');
+  return Component;
 }
 
 const runtimeHtml = (doc) =>
