@@ -2,11 +2,20 @@
 // React (TSX) source you own. No runtime lock-in: the only dependency of the
 // emitted code is React.
 import { compilePage, type BuilderDocument, type BuilderNode } from '@noidmejs/atomkit';
-import { emitNode } from './codegen.js';
+import { emitNode, type Warning } from './codegen.js';
 
 export interface CompileOptions {
   /** Component name for the generated default export (sanitised). */
   name?: string;
+  /**
+   * Called for every node the compiler cannot reproduce faithfully: unknown atoms,
+   * runtime-only atoms (`video`), responsive overrides, and data bindings.
+   *
+   * The compiled component does NOT fetch — it renders the authored fallback
+   * forever. Anything reported here is a difference between the static build and
+   * what the atomkit runtime renderer would show.
+   */
+  onWarn?: (w: Warning) => void;
 }
 
 // Static compiled output CANNOT enforce runtime governance (per-viewer role /
@@ -35,11 +44,24 @@ export function compileDocumentToReact(doc: BuilderDocument, opts: CompileOption
   const name = (opts.name ?? 'Page').replace(/[^A-Za-z0-9_]/g, '') || 'Page';
   const dropped = { n: 0 };
   const root = stripGoverned(doc.root, dropped);
-  const body = root.map((n) => emitNode(n, '      ')).join('\n');
-  const note =
-    dropped.n > 0
-      ? `// atomkit-compiler: omitted ${dropped.n} governed/hidden node(s) — static output cannot enforce\n// runtime governance (role/consent/PII gating); render those via the @noidmejs/atomkit runtime.\n`
-      : '';
+  const warnings: Warning[] = [];
+  const warn = (w: Warning): void => { warnings.push(w); opts.onWarn?.(w); };
+  const body = root.map((n) => emitNode(n, '      ', warn)).filter(Boolean).join('\n');
+
+  // Record every divergence from the runtime IN the emitted file. Whoever reads
+  // this component months later must not have to guess why it never fetches.
+  const notes: string[] = [];
+  if (dropped.n > 0) {
+    notes.push(
+      `// atomkit-compiler: omitted ${dropped.n} governed/hidden node(s) — static output cannot enforce`,
+      `// runtime governance (role/consent/PII gating); render those via the @noidmejs/atomkit runtime.`,
+    );
+  }
+  if (warnings.length) {
+    notes.push(`// atomkit-compiler: ${warnings.length} node(s) do not match the runtime renderer:`);
+    for (const w of warnings) notes.push(`//   · node ${w.node} (${w.type}): ${w.reason}`);
+  }
+  const note = notes.length ? notes.join('\n') + '\n' : '';
   return (
     `import * as React from 'react';\n\n` +
     note +
@@ -53,4 +75,4 @@ export function compileToReact(aql: string, opts: CompileOptions = {}): string {
   return compileDocumentToReact(compilePage(aql), opts);
 }
 
-export { emitNode } from './codegen.js';
+export { emitNode, type Warning, type Warn } from './codegen.js';

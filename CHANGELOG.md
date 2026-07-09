@@ -2,6 +2,44 @@
 
 All notable changes to `@noidmejs/atomkit-compiler`. Pre-1.0: minor versions may break.
 
+## 0.3.0
+
+The compiler is a second, hand-written implementation of atom semantics, and
+nothing tested that compiled TSX rendered the same DOM as the runtime. It had
+already drifted. "No lock-in" is only true while the new conformance suite passes.
+
+### Fixed — BREAKING
+- **Unknown atom types failed OPEN.** The runtime renders nothing for an
+  unregistered type (`renderNode` returns `null`), but codegen emitted a generic
+  `<div>` carrying the node's text — so a custom or misspelled atom leaked raw
+  content into the compiled build while rendering as nothing under SSR. Codegen now
+  fails closed and reports it.
+- **`list` compiled to a native bulleted `<ul>`** with browser default margins and
+  no list role, while the runtime renders a marker-less flex column with
+  `role="list"` / `role="listitem"` — silently dropping the WCAG 1.3.1 fix core
+  added in 0.5.0. Now identical.
+- **Prop coercion diverged from the runtime.** `row wrap` compared `=== false` and
+  `list ordered` compared `=== true`, but AQL yields the *strings* `'false'` /
+  `'true'`. Both now use the runtime's `isFalse`/`isTrue` semantics.
+- **`video` was compiled to a generic `<div>`.** It is a runtime-only atom; it is
+  now omitted and reported rather than approximated.
+- **`safeDim` was a second, hand-maintained copy** of the runtime's dimension
+  sanitiser. It is now imported from `@noidmejs/atomkit` — the guarantee cannot drift.
+- `grid cols` is clamped to 24 on both sides; `accordion-item` emits the runtime's
+  `cursor: pointer` summary style.
+
+### Added
+- **`CompileOptions.onWarn`** — reports every node the compiler cannot reproduce
+  faithfully: unknown atoms, runtime-only atoms, dropped responsive overrides, and
+  data bindings. The emitted file records the same list in its header comment.
+  **The compiled component does not fetch**; a data-bound node renders its authored
+  fallback forever. This was previously undocumented and actively mis-stated.
+- **`test/conformance.test.mjs`** — transpiles the emitted TSX with the real
+  TypeScript compiler, renders it, and diffs the HTML against the runtime renderer
+  over a 21-document corpus. Also asserts every registered atom is either compiled
+  or explicitly runtime-only, so adding an atom to core without teaching the
+  compiler now fails CI.
+
 ## 0.2.0
 ### Security / governance (from the adversarial audit)
 - **Governance-aware codegen, fail-closed**: nodes flagged `protected` / `roles` /
